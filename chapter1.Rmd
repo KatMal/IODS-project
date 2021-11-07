@@ -11,3 +11,8 @@ date()
 ```
 The text continues here.
 
+## Exercise 1 
+I think this course will be easy for me as I'm familiar with most of the concepts and I have used R studio before. I think a refresher on the topics is still useful as I can't for example remember R syntax and how exactly to use github. This course was listed as an option in my degree's transferable skills section as a course I could take.
+
+**my github**: https://github.com/KatMal/IODS-project
+
