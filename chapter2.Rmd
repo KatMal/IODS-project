@@ -1,4 +1,4 @@
-# Insert chapter 2 title here
+# Week 2, regression and model validation
 
 *Describe the work you have done this week and summarize your learning.*
 
@@ -11,3 +11,85 @@ date()
 ```
 
 Here we go again...
+
+## Exercise 2
+
+The data set used for this exercise consists of data gathered from a survey on a course, where 183 students answered it. The survey asked from the students about their attitudes towards learning and studying. They were asked deep, surface and strategic level questions. The data set used in this exercise is a modified version of this data where students who got 0 exam points have been excluded leaving 166 students. Their attitudes and question scores have been averaged to reflect the original scaling of the questions. Overall the data set has 166 observations from the students and 7 variables consisting of the gender of the student, age of the student, attitude, three different question types and exam points. Most of the data consists of numeric data except for the gender variable which is character type data.
+
+Basic information about the data:
+
+```{r}
+learn14 <- read.table("C:\\Users\\katri\\Documents\\IODS-project\\data\\learning2014.txt", sep = '\t', header = TRUE)
+
+dim(learn14)
+str(learn14)
+head(learn14)
+
+```
+
+Commentary on the data:
+
+In the data set there are a total of 166 students, out of these 110 (66%) are female while 56 (34%) are male. According to the summary of the variables the average age of a student in the course was 25, but the students ranged in age from 17 to 55,  but with most students being under the age of 27. In their attitudes the students varied between unmotivated (1.4) and very motivated (5). In the case of attitude it's median (3.2) and mean (3.1) are close to each other and reflect average to good motivation. For the different question types the strategic questions have a similar distribution as the attitude variable, but deep questions have higher values and surface questions lower overall. The lowest points in the exam were 7, while highest were 33, the average being 22.7.
+
+```{r}
+library(plyr)
+
+count(learn14$gender)
+summary(learn14)
+
+```
+
+In the graphical overview we can see that male students have a somewhat better attitude than female students and the number of male students who scored better in the exam is proportionally higher than in female students. As there are fewer male students they could have been more self selective so that more motivated male students were more likely to attend the course. Female students had higher mean values for surface and strategic level questions than the male students. Correlations between different features seems to be overall low, the highest correlation is between attitude and exam points. Male students exhibit some correlation between attitude and the three question types while for female students the effect is essentially nonexistent. For male students it is also possible to see some correlation between the different question types, the same effect is not seen to the same extent with female students.
+
+```{r}
+library(ggplot2)
+library(GGally)
+
+p <- ggpairs(learn14, mapping = aes(col = gender, alpha = 0.3), lower = list(combo = wrap("facethist", bins = 20)))
+p
+```
+
+Regression analysis:
+
+I chose attitude, strategic questions and surface questions as my explanatory variables in the model as they had the highest correlation with exam points.
+```{r}
+lm_model <- lm(points ~ attitude + stra + surf, data = learn14)
+summary(lm_model)
+```
+The statistical test used in the model assumes the null hypothesis that an explanatory variable has no effect on the target variable. The *t* value represents the estimate of an explanatory variable divided by its standard error. A small standard error will result in higher *t* value. The p value represents the likelihood of obtaining this *t* value if the null hypothesis is true, small p value means that it is very unlikely that we can get the observed data distribution by chance.
+
+According to the summary 'attitude' would have the highest effect on the target variable as its estimate is ~3.4 and would affect the slope of the model quite a bit. On the other hand 'stra' and 'surf' are 0.85 and -0.58 respectively and would have little effect on the tatget variable as their effect on the slope would be near zero. 
+
+Out of the three explanatory variables 'attitude' is the only one that has an interesting estimated value with also a correspondingly high *t* value and statistically significant p value. 'stra' and 'surf' on the other hand did not have statistically significant relationship with the target value as their p values were too high.
+
+The strategic and surface level questions did not have statistically significant p values so I removed them from the next model.
+
+```{r}
+library(ggplot2)
+p <- ggplot(learn14, aes(x = attitude, y = points, col = gender)) + geom_point() + geom_smooth(method = "lm") + ggtitle("points ~ attitude model")
+p
+
+lm_model <- lm(points ~ attitude, data = learn14)
+summary(lm_model)
+
+```
+
+The significance of attitude increased and the p value is even smaller after removing the other two variables. The effect on the slope of the model also increased as the estimate for 'attitude' increased to 3.5. 
+
+Multiple R-squared represents how much of the target variable can be explained by the explanatory variables, the higher the value the better the model is generally considered to be. In this case the model with only attitude variable can explain around 19% of the variance seen in the points variable.
+
+
+```{r}
+par(mfrow =c(2,2))
+plot(lm_model, which = c(1,2,5))
+```
+
+In linear regression we assume that the relationship between the target value and explanatory variables is linear, which we can see in the points ~ attitude plot where the regression lines are clearly diagonal.
+
+General assumptions about the errors in the model are that they are normally distributed, are not correlated and have constant variance. If for example variance is not constant we can see that the residues would disperse in the plots. Errors are also not dependent on any of the variables in the model. 
+
+Normality can be observed in the QQ plot where if the residues are normally distributed they will mostly fall on the diagonal line. In my opinion normality holds in this case as most of the points are on the diagonal line and none of them look like they are very far from it if they are not on it.
+
+In the residuals vs fitted plot we can see that there is no pattern or dispersion of the points meaning that the variance of the errors is constant as expected.
+
+There are also not any significant outliers as the Cook's distance is small for all data points as can be observed in the leverage plot.
