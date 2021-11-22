@@ -1,0 +1,146 @@
+# Week 3, logistic regression
+
+## Exercise 3
+
+The data in this exercise consists of student questionnaire that measured student performance in mathematics and Portuguese language. The questionnaires were performed in two Portuguese high schools in 2008. The data set includes background information about the students' families, use of time such as study and free time,  health information such as a score for overall health and alcohol consumption. Student performance variables include information about the grades and absences. The data includes both categorical data and integer data where lower numbers indicate lower score and higher numbers higher score or satisfaction.
+
+```{r}
+
+student_data <- read.table('data/joint_student_data.tsv', sep = '\t', header = TRUE)
+
+colnames(student_data)
+
+```
+Potentially interesting variables in my opinion are: age, goout, sex, and health. 
+
+I think age is an interesting variable as I would expect that older students are more likely to drink or drink heavily in comparison to younger students. 
+
+The goout variable refers to going out with friends. As drinking alcohol is often done in social situation such as parties rather than alone I would expect that students who go out a lot with their friends would also drink more. More introverted students would also be less likely to have friends who can acquire alcohol as they likely have less friends overall than more sociable students.
+
+I would also expect to see a sex difference between boys and girls as adult men tend to drink more than women and thus I expect to see this difference already reflected in students. I also expect that boys are overall heavier drinkers than girls as boys are able to metabolize higher quantities of alcohol and are more likely to engage in risky behavior.
+
+The health variable is about the overall health status with low numbers referring to low health and high ones to better health. Excessive drinking could be related to lower overall health.
+
+```{r}
+library(plyr)
+library(dplyr)
+
+plyr::count(student_data$sex)
+
+summary(student_data$goout)
+summary(student_data$age)
+summary(student_data$health)
+
+student_data %>% group_by(high_use) %>% dplyr::summarise(count = n(), mean_health = mean(health), mean_goout = mean(goout), mean_age = mean(age))
+
+student_data %>% group_by(sex, high_use) %>% dplyr::summarise(count = n(), mean_health = mean(health), mean_goout = mean(goout), mean_age = mean(age))
+
+```
+In the data I have 195 female students and 175 male students. I think this is overall a good distribution and not too biased one way. 
+
+The age range of students varies from 15 to 22 with the mean being 16.6. The legal age of drinking wine and beer in Portugal was 16 before a new law introduced in 2015 so most students would have been legally allowed to drink milder alcoholic drinks when the questionnaire was performed but not allowed to drink spirits for which the legal drinking age was 18. A breakdown of students into high and low alcohol users shows that high users are a little older than low users. This is as I expect in my hypothesis. Interestingly girls who are older are less likely to be high alcohol users while older boys are more likely to use alcohol a lot.
+
+The mean value of goout is 3.1 and median 3 so overall students tend to go out not too rarely but not too often either. Like I hypothesized high alcohol users are more likely to go out with their friends. High alcohol user boys are especially likely to go out with their friends while boys who are low alcohol users are the least likely to go out with their friends. Girls who use high quantities of alcohol are also more likely to go out but the comparison to low alcohol using girls is less extreme.
+
+The mean health score is 3.6 so students overall have okay to good health. Interestingly the health of students who are high alcohol users is higher thant that of students who are low users which is not what I expected. Boys who are high alcohol users report the highest health scores while girls who are low alcohol users report the lowest score with girls' health overall being worse than boys'. 
+
+
+
+```{r}
+library(ggplot2)
+library(gridExtra)
+
+
+bar1 <- ggplot(data = student_data, aes(x = age)) + geom_bar() + facet_wrap("sex") + ggtitle("student age")
+bar2 <- ggplot(data = student_data, aes(x = goout)) + geom_bar() + facet_wrap("sex") + ggtitle("going out rate")
+bar3 <- ggplot(data = student_data, aes(x = health)) + geom_bar() + facet_wrap("sex") + ggtitle("health of students")
+
+grid.arrange(bar1, bar2, bar3, ncol = 3)
+
+bar1 <- ggplot(data = student_data, aes(y = age, x = high_use, col = sex)) + geom_boxplot() + ggtitle("student age")
+bar2 <- ggplot(data = student_data, aes(y = goout, x = high_use, col = sex)) + geom_boxplot() + ggtitle("going out rate")
+bar3 <- ggplot(data = student_data, aes(y = health, x = high_use, col = sex)) + geom_boxplot()  + ggtitle("health of students")
+
+grid.arrange(bar1, bar2, bar3, ncol = 3)
+
+```
+
+I do not think the bar or box plots reveal much information that was not available from the numeric analysis. Though it can be seen that boys were very likely to rate their health as excellent and girls were much more likely to rate their health as poor. 
+
+I think overall my hypotheses were true, older students are more likely to drink as I expected but this differs when broken down by sex as younger girls are more likely to drink. Boys are also more likely to be heavier drinkers as there are proportionally and in numerically more heavy drinking boys than girls. As I hypothesized students who go tout are more likely to be heavy drinkers. What did not match my hypothesis is the health information as students who were heavy drinkers were more likely to report better health.
+
+
+Logistic regression of the variables:
+
+```{r}
+model <- glm(high_use ~ age + sex + goout + health, data = student_data, family = 'binomial')
+
+summary(model)
+
+```
+
+Based on the model the sex of the student and goout are statistically significant factors in determining if a student is heavy alcohol user or not if we assume that p-values less than 0.05 are significant. On th other hand age and health are not. Going out rate is the most significant factor according to the model. The intercept difference between female and male students is approximately 0.89.
+
+```{r}
+
+coef(model)
+
+OR <- coef(model) %>% exp
+CI <- confint(model) %>% exp
+cbind(OR, CI)
+
+```
+Out of the coefficients sexM has the widest confidence interval. Age and health odds ratios are very close to one so while they have a minor effect in predicting who of the students is a high alcohol user they overall do not matter. On the other hand if the sex of the student is male then it is 2.4 times more likely for the student to be a high alcohol user than if the student was female. Similarly outgoing students are 2.1 times more likely to be high alcohol users compared to students who do not go out often. 
+
+Predicting whom of the students is a high alcohol user:
+
+```{r}
+model2 <- glm(high_use ~ sex + goout, data = student_data, family = 'binomial')
+
+summary(model2)
+
+predicted_prob <- predict(model2, type = "response")
+student_data <- mutate(student_data, predicted_probability = predicted_prob)
+student_data <- mutate(student_data, predicted_value = student_data$predicted_probability > 0.5)
+
+table(high_use = student_data$high_use, prediction = student_data$predicted_value)
+
+table(high_use = student_data$high_use, prediction = student_data$predicted_value) %>% prop.table() %>% addmargins()
+```
+Based on the cross tabulation we can see that the prediction rate for false cases as false is 65.4% and true cases as true 13.2%. The false positive rate is 4.6% and false negative is 16.8%. The model thus overall seems to do worse when predicting who is a high alcohol user and is more likely to predict high alcohol users as low alcohol users than low alcohol users as high alcohol users.
+
+```{r}
+plyr::count(student_data$high_use == student_data$predicted_value)
+
+loss_func <- function(class, prob) {
+  n_wrong <- abs(class - prob) > 0.5
+  mean(n_wrong)
+}
+
+loss_func(class = student_data$high_use, prob = student_data$predicted_value)
+```
+I have a total of 79 incorrectly predicted individuals and the overall training error rate is 21%. This is not very good when predicting if a student is a heavy alcohol user as the model predicts every fifth student wrong and ideally our model would be basically never wrong if we wanted accurate predictions.
+
+```{r}
+student_data$guess <- sample(c(TRUE, FALSE),370, TRUE, c(0.5,0.5))
+
+plyr::count(student_data$guess)
+
+loss_func(class = student_data$high_use, prob = student_data$guess)
+
+```
+If we guess with a 50% chance of each student being a high alcohol user we get are wrong approximately half the time as the error rate is around 50%. Based on this the model is better than mere random guessing and is at least mildly useful in predicting who is a high alcohol user among the students.
+
+Simple 10-fold cross validation:
+```{r}
+library(boot)
+cv10 <- cv.glm(data = student_data, cost = loss_func, glmfit = model2, K = 10)
+
+cv10$delta[1]
+
+```
+According to the 10-fold cross validation the error rate varies around 22%-24% which is better than the datacamp model where the error rate is 26%. Accordingly my model is a tiny bit better than the datacamp model.
+
+My overall conclusion of this exercise is that my hypothesis regarding the student age and health showing a connection between high alcohol use was wrong. These variables did not have a statistically significant relationship between alcohol consumption. On the other hand my hypothesis regarding male students and outgoing students being more likely to be high alcohol users were correct. Additionally I managed to make a model that was slightly better than the datacamp one.
+
+tbc in chapter 4
