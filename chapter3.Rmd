@@ -142,5 +142,3 @@ cv10$delta[1]
 According to the 10-fold cross validation the error rate varies around 22%-24% which is better than the datacamp model where the error rate is 26%. Accordingly my model is a tiny bit better than the datacamp model.
 
 My overall conclusion of this exercise is that my hypothesis regarding the student age and health showing a connection between high alcohol use was wrong. These variables did not have a statistically significant relationship between alcohol consumption. On the other hand my hypothesis regarding male students and outgoing students being more likely to be high alcohol users were correct. Additionally I managed to make a model that was slightly better than the datacamp one.
-
-tbc in chapter 4

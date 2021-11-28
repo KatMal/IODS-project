@@ -1,0 +1,135 @@
+# Week 4, clustering and classification
+
+## Exercise 4
+
+In this exercise we use a data set called "Boston", which contains data gathered from the city of Boston. The data set for example contains information about housing such as value of houses, property tax, and number of rooms in a house. Other data include for example crime rates, pollution rates, zoning, and accessibility to highways. 
+
+```{r}
+library(MASS)
+
+data("Boston")
+
+dim(Boston)
+str(Boston)
+
+```
+The Boston data set has 14 columns and 506 rows and all of the data is numeric.
+
+```{r Fig1, echo = TRUE, fig.height=10, fig.width=10}
+library(ggplot2)
+library(GGally)
+library(corrplot)
+
+summary(Boston)
+
+p <- ggpairs(Boston, mapping = aes(alpha = 0.3), lower = list(combo = wrap("facethist", bins = 20)))
+p
+
+```
+
+```{r Fig2, echo=TRUE, fig.height=5, fig.width=5}
+cor_matrix<-cor(Boston) 
+cor_matrix %>% round(2)
+corrplot(cor_matrix, method="circle", type = "upper", cl.pos = "b", tl.pos = "d", tl.cex = 0.6)
+```
+Based on the plots most of the columns do not seem to follow the normal distribution and instead we can see multiple peaks in the data. There seems to be strong negative correlations between 'dis' and 'indus' (non-retail business) , 'nox' (nitrogen oxides) , and 'age' (built prior to 1940). A very strong correlation can also be seen between 'lstat' (lower status population) and 'medv' (median value of homes). It is not particularly surprising that lower status population could afford only cheaper homes.
+
+A strong positive correlation seems to exits between 'rad' (access to radial highways) and 'tax' (property tax) as well as 'indus' and 'nox' and between 'nox' and 'age'. It is again not that surprising that areas with more industry would have higher nitrogen oxide levels. 
+
+In the summary we can see that crime rates vary from very low with a minimum of 0.006 to very high with a crime rate of 88.98. The median is closer to the low rate so this very high rate is clearly some kind of anomaly within Boston and not reflective of the entire city.
+
+The age variable indicates that there are areas in Boston where almost no houses are old and then there are areas where are houses are old. But old houses seem to be common overall as the first quantile is at 45%. 
+
+Standardizing data:
+```{r}
+boston_stand <- as.data.frame(scale(Boston))
+summary(boston_stand)
+
+bins <- quantile(boston_stand$crim)
+bins
+
+crime <- cut(boston_stand$crim, breaks = bins, include.lowest = TRUE, label = c("low", "med_low", "med_high", "high"))
+
+boston_stand$crim <- crime #no need to remove the crime column when it can be just replaced
+
+table(crime)
+
+```
+Since the data has bee scaled it now is distributed around a 0 mean so all variables have a 0 mean in the summary.
+
+The distribution of crime rates seem to be approximately equally distributed between the four crime levels.
+
+Fitting a LDA model and drawing a plot:
+```{r}
+n <- nrow(boston_stand)
+ind <- sample(n, size = n*0.8) #splitting data into train and test sets
+train <- boston_stand[ind,]
+test <- boston_stand[-ind,]
+```
+
+
+```{r}
+lda.fit <- lda(crim ~ ., data = train)
+lda.fit
+
+#copied from the datacamp exercise
+
+lda.arrows <- function(x, myscale = 1, arrow_heads = 0.1, color = "red", tex = 0.75, choices = c(1,2)){
+  heads <- coef(x)
+  arrows(x0 = 0, y0 = 0, 
+         x1 = myscale * heads[,choices[1]], 
+         y1 = myscale * heads[,choices[2]], col=color, length = arrow_heads)
+  text(myscale * heads[,choices], labels = row.names(heads), 
+       cex = tex, col=color, pos=3)
+}
+
+classes <- as.numeric(train$crim)
+
+plot(lda.fit, dimen = 2, col = classes, pch = classes) 
+lda.arrows(lda.fit, myscale = 2)
+```
+The high crime rate and some medium high crime rate datapoints seem to form their own cluster. 'rad' (accessibility to radial highways) seems to be the feature that separates this cluster from the others. In the previous correlation plots we can see that there is indeed a positive correaltion between crime rate and 'rad'. 
+
+'zn' and 'nox' seem to separate the other axis. In this case it separates out the lower crime areas from the medium high ones. The 'zn' (residential lots) and 'nox' (nitrogen oxide levels) probably correlate between more quiet residential areas and industrial areas or areas near them.
+
+Predicting:
+```{r}
+correct <- test$crim
+test <- dplyr::select(test, -crim)
+
+lda.pred <- predict(lda.fit, newdata = test)
+table(correct = correct, predicted = lda.pred$class)
+```
+The model seems to predict well the high crime rates, but has trouble separating the medium crime levels. Predicting low crime rates works quite well, but the model has trouble separating the low and medium low rates from each other. Similarly the model has problems separating medium low and medium high rates from each other.
+
+
+Clustering with k-means:
+```{r Fig3, echo=TRUE, fig.width=10, fig.height=10}
+data("Boston")
+scaled_boston <- scale(Boston)
+
+dist_eu <- dist(scaled_boston)
+
+km <-kmeans(scaled_boston, centers = 4)
+
+pairs(scaled_boston, col = km$cluster)
+```
+4 clusters does not seem to be all that great as there is still overlap between the different clusters and as the LDA prediction indicated a lower number of clusters is probably better since there is confusion between the classes.
+
+Investigating how many clusters would be good:
+```{r}
+twcss <- sapply(1:10, function(k){kmeans(Boston, k)$tot.withinss})
+qplot(x = 1:10, y = twcss, geom = 'line')
+
+```
+
+According to the plot 2 clusters seems to be a good number to try.
+
+```{r Fig4, echo=TRUE, fig.width=10, fig.height=10}
+km <-kmeans(scaled_boston, centers = 2)
+pairs(scaled_boston, col = km$cluster)
+```
+Now we can see the clusters much easily. It is probably better in the model to separate the crime rate into a high one and low to medium levels.
+
+In the plots we can see for example in the 'lstat' and 'medv' a clear separation between the two clusters and it would be easy to draw a straight line between them to separate the to clusters. There are also plots where the two clusters are completely separate from each other.
+
