@@ -1,0 +1,105 @@
+# Week 5, dimensionality reduction
+## Exercise 5
+
+The data set used in this exercise is about country specific human development index (HDI) and gender inequality index (GII).HDI measures the development of the country and includes measurements such as life expectancy and years of education as well as the GNI. GII measures the inequality between the sexes across different countries. GII contains information regarding the secondary educational attainment of the sexes and labour force participation. Additionally the GII measures the number of female representatives in the parliament. GII also contains information regarding the maternal mortality rate as well as the rate of teen pregnancies and births. Overall both HDI and GII rank countries according to how well they do by the things they measure
+
+The human data set used contains country specific information about the ratio of secondary education attainment between women and men, labour force participation ratio between women and men, expected years of education, life expectancy, maternal mortality, teen birth rates, percentage of female parliament members, and GNI. The dataset has these 8 variables for 155 different countries.
+
+```{r}
+human <- read.table(file='data/human2.tsv', sep = '\t')
+
+summary(human)
+
+```
+As can be seen the data consists of numeric variables. In the edu_ratio, labour_ratio, exp_edu, life_exp and representation_perc we can see that the mean and median are close together so there does not seem to be any extreme outliers in these variables. On the other hand GNIperC, mat_mort and teen_birth have very different median and mean and based on the max values in them it seems that the max values are quite extreme and pull the mean towards them.
+
+
+```{r}
+library(dplyr)
+library(GGally)
+library(corrplot)
+```
+
+```{r Fig5, echo = TRUE, fig.height=10, fig.width=10}
+
+ggpairs(human)
+
+
+```
+Based on the plot above the variables exp_edu, edu_ratio and labour_ratio look like they approximately follow the normal distribution while it looks like the other variables do not.
+
+```{r}
+cor(human) %>% corrplot()
+```
+Based on the correlations there seems to be a postive correlation between maternal mortality rate and the rate of teen births, the value of the correlation is 0.759. As a result there's a negative correlation between life expectancy and these two variables. Another variable that has a negative correlation between the two first variables is expected education. Similarly there is a negative correlation with the ratio of female and male educational attainment and the GNI of the country and the two first variables. Based on these data it can be said that countries with poor education attainment for women have high teen birth rates and high maternal mortality rates and that these countries are overall poorer than countries that have high educational attainment for women and low maternal mortality rates.
+
+Principal component analysis of the data:
+
+```{r}
+pca <- prcomp(human)
+pca_s <- prcomp(scale(human))
+```
+
+```{r}
+pca
+s1 <- round(100*summary(pca)$importance[2,], digits = 2)
+s1 #variability captured by the PCA components without standardisation
+pca_s
+s2 <- round(100*summary(pca_s)$importance[2,], digits = 2)
+s2 #variability captured by PCA when data has been standardised
+
+s1_lab <- paste0(names(s1), " (", s1, "%)")
+s2_lab <- paste0(names(s2), " (", s2, "%)")
+```
+When not standardising data the first component captures 99% of the variance in the data while in the standardised data it is 53%, which is much more reasonable. The variance captured by the components after standardisation is quite different, but not surprising. As seen in the first plot most of the variables do not follow normal distribution while PCA works better if the variables follow a normal distribution as then the components are independent from each other. Doing PCA on non-standardised data can result in unintuitive results.
+
+
+```{r Fig6, echo = TRUE, fig.height=5, fig.width=10}
+
+par(mfrow = c(1,2))
+biplot(pca, choices = 1:2, cex = c(0.8, 1), col = c("grey40", "deeppink2"), xlab = s1_lab[1], ylab = s1_lab[2], main = "non-standardised PCA", sub = "GNI explains most of the variance")
+biplot(pca_s, choices = 1:2, cex = c(0.8, 1), col = c("grey40", "deeppink2"), xlab = s2_lab[1], ylab = s2_lab[2], main = "standardised PCA", sub = "poor conditions for women explains most of the variance")
+
+
+```
+In the two above plots we can see that in the non-standardised data most of the variance can be explained by the GNI of the country and it seems to explain the vast majority of the first PCA component. It is not surprisign that GNI seems to be the most important factor in this case as it correlated in the corrplot with almost all variables and thus may capture all of the variance explained by these other variables too.
+
+In the standardised biplot we can see that there are two clear components. The first component seems to have been able to separate out the effects of the other variables more clearly rather than just lumping them all under GNI. The first component seems to mostly relate to the living conditions of women as the arrows for teen births and maternal mortality point away from expected education and life expectancy which had a negative correlation with the first two variables mentioned. The second component seems to consist of the two variables that GNI did not correlate with strongly, these would be labour ratio between women and men and the representation of women in the parliament. It seems like this component captures information about the participation of women in the economy and political life while the first component is more about general prospects for women or about general poverty.
+
+Multiple correspondence analysis:
+
+```{r}
+library(FactoMineR)
+library(tidyr)
+
+data(tea)
+
+dim(tea)
+str(tea)
+```
+The tea data set has 36 variables and 300 observations with all variables seemingly being factor variables with at least 2 levels, except for age which is numeric.
+
+Since there are so many variables lets limit it a bit to make the analysis easier:
+
+```{r}
+keep_columns <- c("Tea", "How", "how", "sugar", "where", "tea.time", "age_Q", "feminine", "sex", "friends")
+
+tea_time <- subset(tea, select = keep_columns)
+
+gather(tea_time) %>% ggplot(aes(value)) + facet_wrap("key", scales = "free") + geom_bar() 
+```
+The age distribution seems to favour younger people. It also seems like there were more female participants in the questionnaire. Based on the graphs we can also see that Earl Grey tea was the most popular tea and that most people used tea bags for steeping their tea and that most did not add lemon or milk to their tea while with sugar approximately half of the people added sugar to their tea while the other half did not.
+
+```{r}
+mca <- MCA(tea_time, graph = FALSE)
+summary(mca)
+```
+Overall it seems that none of the dimensions is particularly good at capturing the variance as the first components hover at around 10%. It seems that the tea type affects the first 3 dimensions with the first dimension having a contribution from green tea while the next two dimensions have black and earl grey tea. Another important factor seems to be how the tea was packaged such as tea bag or unpackaged.
+
+lets plot the results:
+
+```{r}
+plot(mca, invisible=c("ind"), habillage = "quali", graph.type = "classic")
+```
+
+I do not think that there is any very clear factors in this plot but it seems that the packaging of the tea, where the tea was bought from and tea type all generally different from each other. On the other hand people who used unpackaged tea seem to have also bought their tea from tea shops while people who used tea bags had bought their tea from a chain store. Additonally, it seems that women were more likely to drink tea with friends while men were more likely to drink tea alone based on the plot.
