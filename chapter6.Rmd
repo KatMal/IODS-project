@@ -1,0 +1,187 @@
+# Week 6, analysis of longitudal data
+## Exercise 6
+
+
+In this exercise we use BPRS data and RATS data. BPRS data is about two treatment groups 40 men were randomly assigned to and they were rated on a psychiatric rating scale, that is supposed to measure if the patient has schizophrenia, at different time points. RATS data consists of data about three different groups of rats that were put on different diets for 9 weeks and their body weights were measured at different time steps.
+
+#### Analysis of RATS data:
+```{r}
+library(dplyr)
+library(tidyr)
+RATSL <- read.table(file='data/RATSL.tsv', sep = '\t')
+RATSL$Group <- factor(RATSL$Group)
+RATSL$ID <- factor(RATSL$ID)
+
+head(RATSL)
+
+```
+
+The data consists of 5 different variables, we have the ID of the rat in question, the dietary group, weight of the rat and the WD and Time refer to the time steps when the rat was weighted.
+
+Lets make a graph of the rat weights at different time points:
+
+```{r}
+library(ggplot2)
+ggplot(RATSL, aes(x = Time, y = weight, linetype = ID)) +
+  geom_line() +
+  scale_linetype_manual(values = rep(1:10, times=4)) +
+  facet_grid(. ~ Group, labeller = label_both) +
+  theme(legend.position = "none") + 
+  scale_y_continuous(limits = c(min(RATSL$weight), max(RATSL$weight)))
+```
+The rats gain weight in all of the groups as time goes forward, this is not surprising as we can assume that all of the rats either grow or get fat as they have eaten more at later time points. We can however see that in group 1 the rats are leanest while in group 3 they are fattest while group 2 is in the middle except for one outlier.
+
+Lets standardise the data next and make another plot:
+
+```{r}
+RATSL <- RATSL %>%
+  group_by(Time) %>%
+  mutate(stdweight = (weight - mean(weight))/sd(weight)) %>%
+  ungroup()
+
+glimpse(RATSL)
+
+ggplot(RATSL, aes(x = Time, y = stdweight, linetype = ID)) +
+  geom_line() +
+  scale_linetype_manual(values = rep(1:10, times=4)) +
+  facet_grid(. ~ Group, labeller = label_both) +
+  scale_y_continuous(name = "standardized weight")
+```
+Now we can see that the weights do not really change in the different groups though we can see that groups 1 is still the thinnest while group 3 is fattest. In groups 2 and 3 it seems that some rats have lost weight at the end.
+
+Lets make a summary measure next:
+
+```{r}
+n <- RATSL$Time %>% unique() %>% length() #11
+
+RATSS <- RATSL %>%
+  group_by(Group, Time) %>%
+  summarise( mean = mean(weight), se = (sd(weight)/sqrt(n)))  %>%
+  ungroup()
+
+glimpse(RATSS)
+
+ggplot(RATSS, aes(x = Time, y = mean, linetype = Group, shape = Group)) +
+  geom_line() +
+  scale_linetype_manual(values = c(1,2,3)) +
+  geom_point(size=3) +
+  scale_shape_manual(values = c(1,2,3)) +
+  geom_errorbar(aes(ymin=mean-se, ymax=mean+se, linetype="1"), width=0.3) +
+  theme(legend.position = c(0.9,0.5)) +
+  scale_y_continuous(name = "mean(weight) +/- se(weight)")
+```
+The different groups in the plot above look the same as in the previous plots as in we can see that the weight of the rats increases as time progresses and that group 1 is thinnest and 3 fattest while 2 is between them.
+
+Lets see if there are any outliers in the data that might need to be removed:
+```{r}
+RATS_ <- RATSL %>%
+  filter(Time > 0) %>%
+  group_by(Group, ID) %>%
+  summarise( mean=mean(weight) ) %>%
+  ungroup()
+
+glimpse(RATS_)
+
+ggplot(RATS_, aes(x = Group, y = mean)) +
+  geom_boxplot() +
+  stat_summary(fun.y = "mean", geom = "point", shape=23, size=4, fill = "white") +
+  scale_y_continuous(name = "mean(weight), time 1-64")
+
+```
+There seems to be 3 outliers, lets remove them:
+```{r}
+RATS_1 <- filter(RATS_, ((RATS_$mean > 240 & RATS_$mean < 550))   )
+RATS_1 <- filter(RATS_1, RATS_1$ID != 13)
+
+glimpse(RATS_1)
+
+ggplot(RATS_1, aes(x = Group, y = mean)) +
+  geom_boxplot() +
+  stat_summary(fun.y = "mean", geom = "point", shape=23, size=4, fill = "white") +
+  scale_y_continuous(name = "mean(weight), time 1-64")
+```
+The outliers have been removed, lets see if there are differences between the groups according to a t-test:
+
+```{r}
+t.test(mean ~ Group, data = subset(RATS_1,RATS_1$Group != 1), var.equal = TRUE)
+
+t.test(mean ~ Group, data = subset(RATS_1,RATS_1$Group != 2), var.equal = TRUE)
+
+t.test(mean ~ Group, data = subset(RATS_1,RATS_1$Group != 3), var.equal = TRUE)
+
+RATS_2 <- RATS_ %>% mutate(baseline = RATSL$weight[RATSL$Time == 1])
+
+fit <- lm(mean ~ baseline + Group, data = RATS_2)
+
+anova(fit)
+```
+Based on the individual t-tests test statistics and p-values we can see that none of the groups have similar means thus the alternative hypothesis that the groups do not have similar means holds. The anova test we can see that baseline has a very low p-value and a large tests statistic thus it seems like the start weight of the rats is more important in this analysis rather than the diet the rats were put on.
+
+#### Analysis of BPRS data:
+
+```{r}
+BPRSL <- read.table(file='data/BPRSL.tsv', sep = '\t')
+BPRSL$treatment <- factor(BPRSL$treatment)
+BPRSL$subject <- factor(BPRSL$subject)
+
+dim(BPRSL) #360, 5
+head(BPRSL)
+```
+Again the data set has 5 variables that are the treatment group, subject ID, the rating on the test (bprs) and the different time points.
+
+
+
+```{r}
+ggplot(BPRSL, aes(x = week, y = bprs, group = subject, col = treatment, alpha = 0.5)) +
+  geom_point() 
+#  scale_x_continuous(name = "Time (weeks)") +
+#  scale_y_continuous(name = "bprs") +
+#  theme(legend.position = "top")
+```
+The line plot did not work for some reason, so I made a plot with points. I think it is overall hard to say anything about the different treatment groups based on this plot.
+
+Lets do a regression and random intercept models next:
+
+```{r}
+library(lme4)
+BPRSL_reg <- lm(bprs ~ week + treatment, data = BPRSL)
+summary(BPRSL_reg)
+
+BPRSL_ref <- lmer(bprs ~ week + treatment + (1|subject), data = BPRSL, REML = F)
+summary(BPRSL_ref)
+
+```
+Based on the regression model the time that passes seems to be the most significant feature and that the treatment does not seem to be that important as it does not have a significant p-value. treatment group 2 also seems to have higher scores in the psychiatric test. The random intercept model again seems to show that the relationship between the intercept and the time that passes is significant. Treatment does not seem to be all that important in this model either.
+
+Lets adjust the random intercept model and make a slope model.
+
+```{r}
+
+BPRSL_ref1 <- lmer(bprs ~ week + treatment + (week|subject) + (week * treatment), data = BPRSL, REML = F)
+summary(BPRSL_ref1)
+
+```
+It seems that the subject still adds a huge amount of variance and that time is still somewhat important but not as much as before. Week and treatmnet 2 seem to have some kind of correlation too.
+
+
+```{r}
+anova(BPRSL_ref, BPRSL_ref1)
+
+ggplot(BPRSL, aes(x = week, y = bprs, group = subject, col = treatment)) +
+  geom_line() +
+  scale_x_continuous(name = "Time (week)") +
+  scale_y_continuous(name = "Observed bprs") +
+  theme(legend.position = "top")
+
+BPRSL$fitted <- fitted(BPRSL_ref1)
+
+ggplot(BPRSL, aes(x = week, y = fitted, group = subject, col = treatment)) +
+  geom_line() +
+  scale_x_continuous(name = "Time (week)") +
+  scale_y_continuous(name = "Fitted bprs") +
+  theme(legend.position = "top")
+```
+
+The line plots do not work all that well in this either, but in the fitted values plot we can see that the bprs value goes down as the time goes on. We can thus conclude that either both treatments had some kind of effect or that bprs scores going down are related to some other effect that is unrelated to the treatment groups.
+
+
